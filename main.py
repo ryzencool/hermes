@@ -3,11 +3,17 @@ import json
 
 import gitlab
 import requests
-from flask import Flask, Response, jsonify, request
+from flask import Flask, Response, jsonify, request, session
+from flask.ext.session import session
 from flask_cors import CORS
+import pymongo as pm
 
 gl = gitlab.Gitlab("http://git.dev.qianmi.com",
                    private_token="wbFxyiyeM49bPUo7w8HB")
+# 连接数据库
+client = pm.MongoClient('localhost', 27017)
+db = client.hermes
+tb_user = db.user
 
 
 class RestResponse(Response):
@@ -23,11 +29,70 @@ app.response_class = RestResponse
 CORS(app, resources={r"/*": {"origins": "*"}})
 
 
+# ---------------------------------------------注册模块----------------------------------------------------
+@app.route("/user/signUp/post", methods=['POST'])
+def post_user():
+    json_req = request.get_json()
+    username = json_req['username']
+    password = json_req['password']
+    private_token = json_req['private_token']
+    # 插入数据库中
+    tb_user.save({'username': username, 'password': password,
+                  'privateToken': private_token})
+    return success_res("注册成功")
+
+# ---------------------------------------------登陆模块----------------------------------------------------
+
+
+@app.route("/user/signIn/get", methods=['GET'])
+def get_user():
+    json_req = request.get_json()
+    username = json_req['username']
+    password = json_req['password']
+    cur_user = tb_user.find({'username': username})
+    if cur_user is not None and cur_user['password'] is password:
+        session['private_token'] = cur_user['private_token']
+        return success_res("success")
+    else:
+        return fail_res("用户不存在或这密码错误")
+
+# ---------------------------------------------配置模板模块------------------------------------------------------
+# 数据库设计： 关于某个领域的配置吧  与一个独立的名称 name， 然后里面是一个数组：数组里面保存着字典{key:'', value:''}
+
+
+@app.route("/properties/template/post")
+def post_properties_template():
+    pass
+    # json_req = request.get_json()
+    # name = json_req['name']
+    # properties = json_req['properties']
+    # for pro in properties:
+        
+
+
+@app.route("/properties/template/get")
+def get_properties_template():
+    pass
+
+
+@app.route("/properties/template/update")
+def update_properties_template():
+    pass
+
+
+@app.route("/properties/template/delete")
+def delete_properties_template():
+    pass
+
+# ---------------------------------------------修改gitlab的模式------------------------------------------------
 # 获取项目环境
 # 环境的优先级 global application < product application < global application env < product application env
+
+
 @app.route('/project/<project>/profile/<profile>/branch/<branch>/get')
 def get_file_by_id(project, profile, branch):
-    response = requests.get("http://localhost:7777/" + project + "/" + profile + "/" + branch)
+    response = requests.get("http://localhost:7777/" +
+                            project + "/" + profile + "/" + branch)
     properties = json.loads(response.text)
     project_public_pro = {}
     project_private_pro = {}
@@ -67,7 +132,8 @@ def get_file_by_id(project, profile, branch):
             v3 = project_public_pro[key]
         if key in project_private_pro.keys():
             v4 = project_private_pro[key]
-        res_list.append({'key': key, 'global': v1, 'global_env': v2, 'project': v3, 'project_env': v4})
+        res_list.append({'key': key, 'global': v1,
+                         'global_env': v2, 'project': v3, 'project_env': v4})
     return success_res({
         "res_list": res_list
     })
@@ -85,7 +151,8 @@ def post_project_config(project):
 @app.route("/project/<project>/profile/<profile>/put", methods=["POST"])
 def post_project_env_config(project, profile):
     json_req = request.get_json()
-    put_configurations(json_req, project + "/application-" + profile + ".properties")
+    put_configurations(json_req, project +
+                       "/application-" + profile + ".properties")
     return success_res("success")
 
 
@@ -125,7 +192,8 @@ def add_global_env_config(profile):
 @app.route("/project/<project>/profile/<profile>/post", methods=["POST"])
 def add_project_env_config(project, profile):
     json_req = request.get_json()
-    post_configurations(json_req, project + "/application" + profile + ".properties")
+    post_configurations(json_req, project +
+                        "/application" + profile + ".properties")
     return success_res("success")
 
 
