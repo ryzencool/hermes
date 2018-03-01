@@ -1,21 +1,25 @@
 import base64
 import json
-
+import logging
 import gitlab
 import requests
 from flask import Flask, Response, jsonify, request, session
-from flask.ext.session import session
 from flask_cors import CORS
 import pymongo as pm
 
 gl = gitlab.Gitlab("http://git.dev.qianmi.com",
                    private_token="wbFxyiyeM49bPUo7w8HB")
 # 连接数据库
-client = pm.MongoClient('localhost', 27017)
+client = pm.MongoClient('localhost', 32768)
 db = client.hermes
 tb_user = db.user
+tb_template = db.template
+
+# 配置中心的ip地址
+config_ip = 'http://localhost:7777'
 
 
+# ---------------------------------------------设置cors和返回值为json等--------------------------------------
 class RestResponse(Response):
     @classmethod
     def force_type(cls, response, environ=None):
@@ -44,14 +48,17 @@ def post_user():
 # ---------------------------------------------登陆模块----------------------------------------------------
 
 
-@app.route("/user/signIn/get", methods=['GET'])
+@app.route("/user/signIn/post", methods=['post'])
 def get_user():
     json_req = request.get_json()
     username = json_req['username']
     password = json_req['password']
-    cur_user = tb_user.find({'username': username})
-    if cur_user is not None and cur_user['password'] is password:
-        session['private_token'] = cur_user['private_token']
+    cur_user = tb_user.find_one({'username': username})
+    print(cur_user["password"] is password)
+    print(cur_user["password"])
+    print(password)
+    if cur_user is not None and cur_user['password'] == password:
+        session['private_token'] = cur_user['privateToken']
         return success_res("success")
     else:
         return fail_res("用户不存在或这密码错误")
@@ -59,30 +66,72 @@ def get_user():
 # ---------------------------------------------配置模板模块------------------------------------------------------
 # 数据库设计： 关于某个领域的配置吧  与一个独立的名称 name， 然后里面是一个数组：数组里面保存着字典{key:'', value:''}
 
+# 新建模板
 
-@app.route("/properties/template/post")
+
+@app.route("/properties/template/post", methods=["post"])
 def post_properties_template():
-    pass
-    # json_req = request.get_json()
-    # name = json_req['name']
-    # properties = json_req['properties']
-    # for pro in properties:
-        
+    json_req = request.get_json()
+    name = json_req['name']
+    properties = json_req['properties']
+    tb_template.save({
+        'name': name,
+        'properties': properties
+    })
+    return success_res("新建模板成功")
+
+# 按照名称查找模板
 
 
-@app.route("/properties/template/get")
-def get_properties_template():
-    pass
+@app.route("/properties/template/<name>/get", methods=["get"])
+def get_properties_template(name):
+    print("姓名是: %s" % name)
+    res = tb_template.find_one({
+        'name': name
+    })
+
+    return success_res({
+        "name": res['name'],
+        "properties": res['properties']
+    })
+
+# 查询所有的模板
 
 
-@app.route("/properties/template/update")
-def update_properties_template():
-    pass
+@app.route("/propertes/templates/get", methods=["get"])
+def get_properties_templates():
+    res = tb_template.find()
+    res_list = []
+    for r in res:
+        res_list.append({
+            "name": r["name"],
+            "properties": r["properties"]
+        })
+    return success_res(res_list)
 
 
-@app.route("/properties/template/delete")
-def delete_properties_template():
-    pass
+@app.route("/properties/template/<id>/update", methods=["post"])
+def update_properties_template(id):
+    json_req = request.get_json()
+    name = json_req["name"]
+    properties = json_req["properties"]
+    res = tb_template.find_one({"_id": id})
+    if res is None:
+        return fail_res("不存在此模板")
+    tb_template.update({
+        "_id": res["_id"],
+        "name": name,
+        "properties": properties
+    })
+    return success_res("success")
+
+
+@app.route("/properties/template/<id>/delete")
+def delete_properties_template(id):
+    tb_template.delete_one({
+        "_id": id
+    })
+    return success_res("success")
 
 # ---------------------------------------------修改gitlab的模式------------------------------------------------
 # 获取项目环境
@@ -91,8 +140,7 @@ def delete_properties_template():
 
 @app.route('/project/<project>/profile/<profile>/branch/<branch>/get')
 def get_file_by_id(project, profile, branch):
-    response = requests.get("http://localhost:7777/" +
-                            project + "/" + profile + "/" + branch)
+    response = requests.get(config_ip + project + "/" + profile + "/" + branch)
     properties = json.loads(response.text)
     project_public_pro = {}
     project_private_pro = {}
@@ -267,4 +315,7 @@ def post_configurations(json_req, file_path):
 
 
 if __name__ == '__main__':
-    app.run(debug=False, port=8080, host='0.0.0.0')
+    app.secret_key = "super secret key"
+    app.config["SESSION_TYPE"] = "filesystem"
+
+    app.run(debug=True, port=8080, host='0.0.0.0')
