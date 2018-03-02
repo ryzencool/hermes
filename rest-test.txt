@@ -1,0 +1,52 @@
+### 用户注册
+POST http://127.0.0.1:8080/user/signUp/post HTTP/1.1
+content-type: application/json
+
+{
+    "username": "zmy",
+    "password": "123",
+    "private_token": "fjlkdsajflda"
+}
+
+### 用户登陆
+
+POST http://127.0.0.1:8080/user/signIn/post HTTP/1.1
+content-type: application/json
+
+{
+    "username": "zmy",
+    "password": "123"
+}
+
+### 新建模板
+
+POST http://localhost:8080/properties/template/post HTTP/1.1
+content-type: application/json
+
+{
+    "name": "redis",
+    "properties": [
+        {
+            "key": "spring.redis.database",
+            "value": 0
+        },{
+            "key": "spring.redis.port",
+            "value": 6379
+        }, {
+            "key": "spring.redis.jedis.pool.max-active",
+            "value": 8
+        }, {
+            "key": "spring.redis.jedis.pool.max-idle",
+            "value": 8
+        }
+    ]
+}
+
+### 按照名称查询模板
+
+GET http://localhost:8080/properties/template/redis/get HTTP/1.1
+
+
+### 查询所有的模板
+
+GET http://localhost:8080/propertes/templates/get HTTP/1.1
